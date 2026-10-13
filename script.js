@@ -41,14 +41,23 @@
   const impulse     = document.getElementById('impulse');
   const impulseVal  = document.getElementById('impulseVal');
   const fuelPreview = document.getElementById('fuelPreview');
+  const impulseHeading = document.getElementById('impulseHeading');
+  const impulseHint = document.getElementById('impulseHint');
+  const trajectoryEditActions = document.getElementById('trajectoryEditActions');
+  const applyImpulseBtn = document.getElementById('applyImpulseBtn');
+  const cancelImpulseBtn = document.getElementById('cancelImpulseBtn');
   const timeLimit   = document.getElementById('timeLimit');
   const timeLimitVal= document.getElementById('timeLimitVal');
   const launchBtn   = document.getElementById('launchBtn');
   const restartBtn  = document.getElementById('restartBtn');
+  const paramsTab   = document.getElementById('paramsTab');
+  const impulseTab  = document.getElementById('impulseTab');
+  const setupParams = document.getElementById('setup-params');
+  const impulseControls = document.getElementById('impulse-controls');
   const tsBtns      = document.querySelectorAll('.tsBtn');
-  const dpBtns      = document.querySelectorAll('.dp');
   const state = {
     phase: 'setup',                   // setup | flying | won | lost
+    editingTrajectory: false,
     time: 0,
     earthAngle: 0,
     marsAngle: 0,
@@ -60,7 +69,9 @@
     timeLimitVal: 1500,
     trail: [],
     prediction: [],
-    timeScale: 1
+    timeScale: 1,
+    stepAccumulator: 0,
+    editOrigin: null
   };
   function posOnOrbit(r, a) {
     return { x: r * Math.cos(a), y: r * Math.sin(a) };
@@ -141,16 +152,30 @@
     return { x: ax, y: ay };
   }
   function predictTrajectory() {
-    if (state.phase !== 'setup') return [];
-    const parking = getParkingOrbitState();
-    const earthStartAngle = EARTH_OMEGA * Number(startDay.value);
-    const marsStartAngle = MARS_START_ANGLE + MARS_OMEGA * Number(startDay.value);
-    const maxTime = Number(timeLimit.value);
-    const prediction = [{ x: parking.x, y: parking.y }];
-    let x = parking.x;
-    let y = parking.y;
-    let vx = parking.vx;
-    let vy = parking.vy;
+    if (state.phase !== 'setup' && !state.editingTrajectory) return [];
+    const editing = state.editingTrajectory;
+    const parking = editing ? null : getParkingOrbitState();
+    const earthStartAngle = editing ? state.earthAngle : EARTH_OMEGA * Number(startDay.value);
+    const marsStartAngle = editing ? state.marsAngle : MARS_START_ANGLE + MARS_OMEGA * Number(startDay.value);
+    const maxTime = editing ? Math.max(1, Number(timeLimit.value) - state.time) : Number(timeLimit.value);
+    let x, y, vx, vy;
+    if (editing) {
+      x = state.ship.x;
+      y = state.ship.y;
+      const angle = Number(trajectory.value) * Math.PI / 180;
+      const speed = Math.hypot(state.ship.vx, state.ship.vy) || 1;
+      const baseAngle = Math.atan2(state.ship.vy, state.ship.vx);
+      const burnAngle = baseAngle + angle;
+      const burn = Number(impulse.value);
+      vx = state.ship.vx + Math.cos(burnAngle) * burn;
+      vy = state.ship.vy + Math.sin(burnAngle) * burn;
+    } else {
+      x = parking.x;
+      y = parking.y;
+      vx = parking.vx;
+      vy = parking.vy;
+    }
+    const prediction = [{ x, y }];
     let t = 0;
     const predictionStep = 1;
     const maxPoints = 1800;
@@ -170,8 +195,27 @@
     return prediction;
   }
   function updatePanels() {
-    setupPanel.classList.toggle('hidden', state.phase !== 'setup');
-    flightPanel.classList.toggle('hidden', state.phase !== 'flying');
+    const isSetup = state.phase === 'setup';
+    const isEditing = state.phase === 'flying' && state.editingTrajectory;
+    setupPanel.classList.toggle('hidden', !(isSetup || isEditing));
+    flightPanel.classList.toggle('hidden', state.phase !== 'flying' || isEditing);
+    launchBtn.disabled = !isSetup;
+    // После старта убираем элементы настройки запуска: остаются игровые кнопки.
+    launchBtn.classList.toggle('hidden', !isSetup);
+    paramsTab.classList.toggle('hidden', !isSetup);
+    paramsTab.disabled = !isSetup;
+    impulseTab.disabled = !(isSetup || state.phase === 'flying');
+    trajectoryEditActions.classList.toggle('hidden', !isEditing);
+    if (isEditing) {
+      showSetupPage('impulse');
+      impulseHeading.textContent = 'Редактирование траектории';
+      impulseHint.textContent = 'Время остановлено. Угол задаёт направление импульса относительно текущей скорости; импульс добавляется к ней, не заменяя её.';
+      fuelPreview.parentElement.querySelector('span').textContent = 'Расход коррекции';
+    } else {
+      impulseHeading.textContent = 'Импульс запуска';
+      impulseHint.textContent = 'Направление задаётся относительно движения по орбите. Величина импульса расходует топливо.';
+      fuelPreview.parentElement.querySelector('span').textContent = 'Расход при старте';
+    }
     const isResult = state.phase === 'won' || state.phase === 'lost';
     resultPanel.classList.toggle('hidden', !isResult);
     if (state.phase === 'won') {
@@ -196,15 +240,24 @@
   function updateFuelPreview() {
     const burn = Number(impulse.value);
     const budget = Number(fuel.value);
-    if (burn <= budget + 1e-9) {
-      fuelPreview.textContent = burn.toFixed(2) + ' ΔV из ' + budget.toFixed(2);
-      launchBtn.disabled = false;
+    const available = state.fuelBudget - state.totalDv;
+    const allowed = state.editingTrajectory ? burn <= available + 1e-9 : burn <= budget + 1e-9;
+    if (allowed) {
+      fuelPreview.textContent = state.editingTrajectory
+        ? burn.toFixed(2) + ' ΔV из доступных ' + Math.max(0, available).toFixed(2)
+        : burn.toFixed(2) + ' ΔV из ' + budget.toFixed(2);
+      launchBtn.disabled = state.phase !== 'setup';
+      applyImpulseBtn.disabled = !state.editingTrajectory || burn <= 0 || burn > available + 1e-9;
     } else {
-      fuelPreview.textContent = 'Нужно ' + burn.toFixed(2) + ' ΔV — доступно ' + budget.toFixed(2);
+      fuelPreview.textContent = state.editingTrajectory
+        ? 'Нужно ' + burn.toFixed(2) + ' ΔV — доступно ' + Math.max(0, available).toFixed(2)
+        : 'Нужно ' + burn.toFixed(2) + ' ΔV — доступно ' + budget.toFixed(2);
       launchBtn.disabled = true;
+      applyImpulseBtn.disabled = true;
     }
   }
   function refreshSetupScene() {
+    state.editingTrajectory = false;
     const day = Number(startDay.value);
     state.earthAngle = EARTH_OMEGA * day;
     state.marsAngle  = MARS_START_ANGLE + MARS_OMEGA * day;
@@ -214,6 +267,7 @@
     state.ship.vx = parking.earthVelocity.x + parking.parkingVelocity.x;
     state.ship.vy = parking.earthVelocity.y + parking.parkingVelocity.y;
     state.time = 0;
+    state.stepAccumulator = 0;
     state.totalDv = 0;
     state.plannedImpulse = Number(impulse.value);
     state.trajectoryDeg = Number(trajectory.value);
@@ -222,8 +276,18 @@
     state.fuelBudget = Number(fuel.value);
     state.timeLimitVal = Number(timeLimit.value);
   }
+  function showSetupPage(page) {
+    const showImpulse = page === 'impulse';
+    setupParams.classList.toggle('hidden', showImpulse);
+    impulseControls.classList.toggle('hidden', !showImpulse);
+    paramsTab.classList.toggle('active', !showImpulse);
+    impulseTab.classList.toggle('active', showImpulse);
+  }
   function resetToSetup() {
     state.phase = 'setup';
+    state.editingTrajectory = false;
+    state.editOrigin = null;
+    showSetupPage('params');
     state.timeScale = 1;
     refreshSetupScene();
     updatePanels();
@@ -231,6 +295,7 @@
     updateHud();
   }
   function launch() {
+    state.editingTrajectory = false;
     refreshSetupScene();
     const plannedImpulse = Number(impulse.value);
     const fuelBudget = Number(fuel.value);
@@ -253,13 +318,52 @@
       document.activeElement.blur();
     }
   }
-  function applyThrust(dx, dy) {
-    if (state.phase !== 'flying') return;
-    if (state.totalDv + THRUST_AMOUNT > state.fuelBudget + 1e-9) return;
-    const len = Math.hypot(dx, dy) || 1;
-    state.ship.vx += (dx / len) * THRUST_AMOUNT;
-    state.ship.vy += (dy / len) * THRUST_AMOUNT;
-    state.totalDv += THRUST_AMOUNT;
+  function beginTrajectoryEdit() {
+    if (state.phase === 'setup') {
+      showSetupPage('impulse');
+      return;
+    }
+    if (state.phase !== 'flying' || state.editingTrajectory) return;
+    state.editOrigin = { x: state.ship.x, y: state.ship.y, vx: state.ship.vx, vy: state.ship.vy };
+    state.editingTrajectory = true;
+    trajectory.value = '0';
+    trajectoryVal.textContent = '0°';
+    impulse.value = '0.05';
+    impulseVal.textContent = '0.05';
+    state.prediction = predictTrajectory();
+    showSetupPage('impulse');
+    updatePanels();
+    updateFuelPreview();
+  }
+  function cancelTrajectoryEdit() {
+    if (!state.editingTrajectory) return;
+    state.editingTrajectory = false;
+    state.editOrigin = null;
+    state.prediction = [];
+    updatePanels();
+    updateFuelPreview();
+  }
+  function applyTrajectoryImpulse() {
+    if (!state.editingTrajectory || state.phase !== 'flying') return;
+    const burn = Number(impulse.value);
+    const available = state.fuelBudget - state.totalDv;
+    if (burn <= 0 || burn > available + 1e-9) {
+      updateFuelPreview();
+      return;
+    }
+    const angle = Number(trajectory.value) * Math.PI / 180;
+    const baseAngle = Math.atan2(state.ship.vy, state.ship.vx);
+    const burnAngle = baseAngle + angle;
+    // Сохраняем текущую скорость и добавляем к ней ΔV в выбранном направлении.
+    state.ship.vx += Math.cos(burnAngle) * burn;
+    state.ship.vy += Math.sin(burnAngle) * burn;
+    state.totalDv += burn;
+    state.editingTrajectory = false;
+    state.editOrigin = null;
+    state.prediction = [];
+    updatePanels();
+    updateHud();
+    updateFuelPreview();
   }
   function substep(dt) {
     const earthStartAngle = state.earthAngle;
@@ -353,15 +457,17 @@
     const ex = tx(ep.x);
     const ey = ty(ep.y);
     const er = Math.max(6, 5 * scale);
-    if (state.phase === 'setup') {
-      const parking = getParkingOrbitState();
+    if (state.phase === 'setup' || state.editingTrajectory) {
+      const parking = state.editingTrajectory ? { parkingRadius: 0, x: state.ship.x, y: state.ship.y, plannedImpulse: Number(impulse.value), burnDirection: (() => { const a = Math.atan2(state.ship.vy, state.ship.vx) + Number(trajectory.value) * Math.PI / 180; return { x: Math.cos(a), y: Math.sin(a) }; })() } : getParkingOrbitState();
       const parkingR = parking.parkingRadius * scale;
       ctx.strokeStyle = 'rgba(120, 220, 120, 0.65)';
       ctx.setLineDash([5, 4]);
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(ex, ey, parkingR, 0, Math.PI * 2);
-      ctx.stroke();
+      if (!state.editingTrajectory) {
+        ctx.beginPath();
+        ctx.arc(ex, ey, parkingR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.setLineDash([]);
       const sx0 = tx(parking.x);
       const sy0 = ty(parking.y);
@@ -412,7 +518,7 @@
     ctx.beginPath();
     ctx.arc(mx, my, mr, 0, Math.PI * 2);
     ctx.fill();
-    if (state.phase === 'setup' && state.prediction.length > 1) {
+    if ((state.phase === 'setup' || state.editingTrajectory) && state.prediction.length > 1) {
       ctx.strokeStyle = 'rgba(255, 220, 110, 0.95)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([7, 6]);
@@ -468,25 +574,6 @@
       ctx.fillText('Лимит времени: ' + tl, 10, 82);
     }
   }
-  let dpadDir = null;
-  let dpadTimer = null;
-  function dpadApply() {
-    if (!dpadDir) return;
-    if (dpadDir === 'up')         applyThrust(0, -1);
-    else if (dpadDir === 'down')  applyThrust(0, 1);
-    else if (dpadDir === 'left')  applyThrust(-1, 0);
-    else if (dpadDir === 'right') applyThrust(1, 0);
-  }
-  function dpadStart(dir) {
-    dpadStop();
-    dpadDir = dir;
-    dpadApply();
-    dpadTimer = setInterval(dpadApply, 120);
-  }
-  function dpadStop() {
-    if (dpadTimer) { clearInterval(dpadTimer); dpadTimer = null; }
-    dpadDir = null;
-  }
   startDay.addEventListener('input', () => {
     startDayVal.textContent = startDay.value;
     if (state.phase === 'setup') refreshSetupScene();
@@ -506,18 +593,25 @@
     trajectoryVal.textContent = Number(trajectory.value) + '°';
     state.trajectoryDeg = Number(trajectory.value);
     if (state.phase === 'setup') refreshSetupScene();
+    else if (state.editingTrajectory) state.prediction = predictTrajectory();
   });
   impulse.addEventListener('input', () => {
     impulseVal.textContent = Number(impulse.value).toFixed(2);
     state.plannedImpulse = Number(impulse.value);
     updateFuelPreview();
     if (state.phase === 'setup') refreshSetupScene();
+    else if (state.editingTrajectory) state.prediction = predictTrajectory();
+    updateFuelPreview();
   });
   timeLimit.addEventListener('input', () => {
     timeLimitVal.textContent = timeLimit.value;
     state.timeLimitVal = Number(timeLimit.value);
   });
   launchBtn.addEventListener('click', launch);
+  paramsTab.addEventListener('click', () => showSetupPage('params'));
+  impulseTab.addEventListener('click', beginTrajectoryEdit);
+  applyImpulseBtn.addEventListener('click', applyTrajectoryImpulse);
+  cancelImpulseBtn.addEventListener('click', cancelTrajectoryEdit);
   restartBtn.addEventListener('click', resetToSetup);
   tsBtns.forEach(b => {
     b.addEventListener('click', () => {
@@ -525,51 +619,13 @@
       updateTimeScaleButtons();
     });
   });
-  dpBtns.forEach(b => {
-    const dir = b.dataset.dir;
-    b.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      dpadStart(dir);
-    });
-    b.addEventListener('pointerup',    dpadStop);
-    b.addEventListener('pointerleave', dpadStop);
-    b.addEventListener('pointercancel', dpadStop);
-  });
-  const keysDown = {};
-  function keyToDir(e) {
-    switch (e.key) {
-      case 'ArrowUp':    return 'up';
-      case 'ArrowDown':  return 'down';
-      case 'ArrowLeft':  return 'left';
-      case 'ArrowRight': return 'right';
-      case 'w': case 'W': return 'up';
-      case 's': case 'S': return 'down';
-      case 'a': case 'A': return 'left';
-      case 'd': case 'D': return 'right';
-    }
-    return null;
-  }
-  window.addEventListener('keydown', (e) => {
-    if (state.phase !== 'flying') return;
-    const dir = keyToDir(e);
-    if (!dir) return;
-    e.preventDefault();
-    if (keysDown[dir]) return;   // игнорируем автоповтор
-    keysDown[dir] = true;
-    if (dir === 'up')         applyThrust(0, -1);
-    else if (dir === 'down')  applyThrust(0, 1);
-    else if (dir === 'left')  applyThrust(-1, 0);
-    else if (dir === 'right') applyThrust(1, 0);
-  });
-  window.addEventListener('keyup', (e) => {
-    const dir = keyToDir(e);
-    if (dir) keysDown[dir] = false;
-  });
   function loop() {
-    if (state.phase === 'flying') {
-      const n = state.timeScale;
-      for (let i = 0; i < n; i++) {
+    if (state.phase === 'flying' && !state.editingTrajectory) {
+      // Базовая скорость симуляции снижена вдвое; кнопки x3/x10 остаются относительными ускорителями.
+      state.stepAccumulator += 0.5 * state.timeScale;
+      while (state.stepAccumulator >= 1) {
         stepGame();
+        state.stepAccumulator -= 1;
         checkResult();
         if (state.phase !== 'flying') break;
       }
@@ -578,6 +634,7 @@
     render();
     requestAnimationFrame(loop);
   }
+  showSetupPage('params');
   refreshSetupScene();
   updatePanels();
   updateTimeScaleButtons();

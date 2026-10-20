@@ -4,18 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0a0a1a">
-<title>Перелёт: Земля — Марс</title>
+<title>Перелёт: Солнечная система</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="app">
-  <h1>Перелёт: Земля — Марс</h1>
+  <h1>Перелёт: Солнечная система</h1>
   <div id="hud" aria-label="Параметры полёта">
     <div><span class="label">Скорость</span><span id="hud-speed">0.00</span></div>
     <div><span class="label">Время</span><span id="hud-time">0</span></div>
     <div><span class="label">ΔV</span><span id="hud-dv">0.00 / 0.15</span></div>
   </div>
-  <canvas id="game" aria-label="Симуляция перелёта Земля — Марс"></canvas>
+  <canvas id="game" aria-label="Симуляция полёта в Солнечной системе"></canvas>
 
   <nav id="main-menu" aria-label="Главное меню">
     <button id="launchBtn" class="primary">Запуск</button>
@@ -32,7 +32,7 @@
         <div class="row"><label for="orbitAlt">Высота орбиты, км</label><input type="range" id="orbitAlt" min="200" max="35786" step="10" value="200"><span id="orbitAltVal" class="value">200</span></div>
         <div class="row"><label for="fuel">Запас топлива, ΔV</label><input type="range" id="fuel" min="0.05" max="0.40" step="0.01" value="0.15"><span id="fuelVal" class="value">0.15</span></div>
         <div class="row"><label for="timeLimit">Запас времени, дни</label><input type="range" id="timeLimit" min="500" max="5000" step="100" value="1500"><span id="timeLimitVal" class="value">1500</span></div>
-        <p class="hint">Задайте стартовые условия. Пунктир показывает прогноз траектории с учётом положения Земли и Марса.</p>
+        <p class="hint">Задайте стартовые условия. На схеме показаны Меркурий, Венера, Земля, Марс, Юпитер и Сатурн. Расстояния между орбитами соотносятся с большими полуосями реальных орбит; размеры планет сохранены пропорционально друг другу для наглядности. Солнце увеличено условно. Пунктир — прогноз с учётом гравитации всех шести планет и их движения во времени. При выборе импульса показан общий план. После запуска камера приближается к аппарату и следует за ним; колесо мыши меняет приближение, а на общем плане перетаскивание перемещает камеру. На телефоне используйте перетаскивание на общем плане.</p>
       </section>
 
       <section id="impulse-controls" class="control-page hidden">
@@ -40,7 +40,7 @@
         <div class="row"><label for="trajectory">Направление, °</label><input type="range" id="trajectory" min="-180" max="180" step="1" value="0"><span id="trajectoryVal" class="value">0°</span></div>
         <div class="row"><label for="impulse">Величина, ΔV</label><input type="range" id="impulse" min="0.00" max="0.40" step="0.01" value="0.11"><span id="impulseVal" class="value">0.11</span></div>
         <div class="fuel-preview"><span>Расход при старте</span><strong id="fuelPreview">0.11 ΔV</strong></div>
-        <p id="impulseHint" class="hint">Направление задаётся относительно движения по орбите. Величина импульса расходует топливо.</p>
+        <p id="impulseHint" class="hint">Направление задаётся относительно движения по орбите. Усиленный импульс расходует топливо.</p>
         <div id="trajectoryEditActions" class="edit-actions hidden"><button id="applyImpulseBtn" class="primary">Применить импульс</button><button id="cancelImpulseBtn">Продолжить без импульса</button></div>
       </section>
     </div>

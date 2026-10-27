@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#0a0a1a">
 <title>Перелёт: Солнечная система</title>
 <link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
 <div id="app">
@@ -15,7 +23,11 @@
     <div><span class="label">Время</span><span id="hud-time">0</span></div>
     <div><span class="label">ΔV</span><span id="hud-dv">0.00 / 0.15</span></div>
   </div>
-  <canvas id="game" aria-label="Симуляция полёта в Солнечной системе"></canvas>
+  <div id="scene-container" aria-label="Солнечная система">
+    <canvas id="game" aria-label="Симуляция полёта в Солнечной системе"></canvas>
+    <canvas id="fallback-scene" aria-label="Запасной вид Солнечной системы"></canvas>
+  </div>
+  <p id="runtime-error" class="runtime-error" hidden>Загрузка 3D-сцены…</p>
 
   <nav id="main-menu" aria-label="Главное меню">
     <button id="launchBtn" class="primary">Запуск</button>
@@ -30,17 +42,20 @@
         <h2>Параметры старта</h2>
         <div class="row"><label for="startDay">Дата старта, день</label><input type="range" id="startDay" min="0" max="1000" step="1" value="300"><span id="startDayVal" class="value">300</span></div>
         <div class="row"><label for="orbitAlt">Высота орбиты, км</label><input type="range" id="orbitAlt" min="200" max="35786" step="10" value="200"><span id="orbitAltVal" class="value">200</span></div>
-        <div class="row"><label for="fuel">Запас топлива, ΔV</label><input type="range" id="fuel" min="0.05" max="0.40" step="0.01" value="0.15"><span id="fuelVal" class="value">0.15</span></div>
+        <div class="row"><label for="fuel">Запас топлива, ΔV</label><input type="range" id="fuel" min="0.50" max="4.00" step="0.05" value="1.50"><span id="fuelVal" class="value">1.50</span></div>
         <div class="row"><label for="timeLimit">Запас времени, дни</label><input type="range" id="timeLimit" min="500" max="5000" step="100" value="1500"><span id="timeLimitVal" class="value">1500</span></div>
-        <p class="hint">Задайте стартовые условия. На схеме показаны Меркурий, Венера, Земля, Марс, Юпитер и Сатурн. Расстояния между орбитами соотносятся с большими полуосями реальных орбит; размеры планет сохранены пропорционально друг другу для наглядности. Солнце увеличено условно. Пунктир — прогноз с учётом гравитации всех шести планет и их движения во времени. При выборе импульса показан общий план. После запуска камера приближается к аппарату и следует за ним; колесо мыши меняет приближение, а на общем плане перетаскивание перемещает камеру. На телефоне используйте перетаскивание на общем плане.</p>
+        <p class="hint">Вращайте камеру мышью или одним пальцем, чтобы смотреть сверху, сбоку и снизу; колесо мыши или щипок двумя пальцами меняет масштаб. Планеты и корабль находятся в настоящем 3D-пространстве. Пунктир показывает численный прогноз с меняющейся гравитацией Солнца и планет; при запуске и настройке импульса время остановлено.</p>
       </section>
 
       <section id="impulse-controls" class="control-page hidden">
         <h2 id="impulseHeading">Импульс запуска</h2>
-        <div class="row"><label for="trajectory">Направление, °</label><input type="range" id="trajectory" min="-180" max="180" step="1" value="0"><span id="trajectoryVal" class="value">0°</span></div>
-        <div class="row"><label for="impulse">Величина, ΔV</label><input type="range" id="impulse" min="0.00" max="0.40" step="0.01" value="0.11"><span id="impulseVal" class="value">0.11</span></div>
-        <div class="fuel-preview"><span>Расход при старте</span><strong id="fuelPreview">0.11 ΔV</strong></div>
-        <p id="impulseHint" class="hint">Направление задаётся относительно движения по орбите. Усиленный импульс расходует топливо.</p>
+        <div class="row"><label for="trajectory">Азимут импульса, °</label><input type="range" id="trajectory" min="-180" max="180" step="1" value="0"><span id="trajectoryVal" class="value">0°</span></div>
+        <div class="row"><label for="elevation">Наклон вверх/вниз, °</label><input type="range" id="elevation" min="-90" max="90" step="1" value="0"><span id="elevationVal" class="value">0°</span></div>
+        <div class="row"><label for="targetPlanet">Целевая планета</label><select id="targetPlanet"><option value="mercury">Меркурий</option><option value="venus">Венера</option><option value="earth">Земля</option><option value="mars" selected>Марс</option><option value="jupiter">Юпитер</option><option value="saturn">Сатурн</option><option value="uranus">Уран</option><option value="neptune">Нептун</option></select></div>
+        <div class="row"><label for="impulse">Величина, ΔV</label><input type="range" id="impulse" min="0.00" max="4.00" step="0.01" value="1.10"><span id="impulseVal" class="value">1.10</span></div>
+        <div class="fuel-preview"><span>Расход при старте / коррекции</span><strong id="fuelPreview">1.10 ΔV</strong></div>
+        <p id="targetStatus" class="hint">Крестик показывает положение выбранной планеты в момент ближайшего сближения по прогнозируемой траектории.</p>
+        <p id="impulseHint" class="hint">Азимут задаёт направление относительно локального движения аппарата, наклон — компоненту импульса вверх или вниз относительно плоскости эклиптики. Во время полёта можно применять дополнительные импульсы: время и планеты замораживаются при открытии коррекции и продолжаются после применения или отмены.</p>
         <div id="trajectoryEditActions" class="edit-actions hidden"><button id="applyImpulseBtn" class="primary">Применить импульс</button><button id="cancelImpulseBtn">Продолжить без импульса</button></div>
       </section>
     </div>
@@ -52,6 +67,111 @@
     <div id="result-panel" class="panel-section hidden"><div id="resultText"></div></div>
   </div>
 </div>
-<script src="script.js"></script>
+<script>
+  window.addEventListener('error', function (event) {
+    const el = document.getElementById('runtime-error');
+    if (el && event.message) { el.hidden = false; el.textContent = 'Ошибка JavaScript: ' + event.message + '. Проверьте подключение к интернету и поддержку WebGL.'; }
+  });
+  window.addEventListener('unhandledrejection', function () {
+    const el = document.getElementById('runtime-error');
+    if (el) { el.hidden = false; el.textContent = 'Не удалось загрузить 3D-библиотеку. Проверьте интернет и обновите страницу.'; }
+  });
+</script>
+
+<script>
+// Standalone canvas renderer used when external Three.js modules cannot load.
+(function(){
+  const canvas=document.getElementById('fallback-scene'),container=document.getElementById('scene-container');
+  if(!canvas||!container)return;const ctx=canvas.getContext('2d');if(!ctx)return;
+  const planets=[
+    {key:'mercury',name:'Меркурий',orbit:42,r:2,color:'#aaa7a1',phase:.7,inc:7,node:48.3,gm:.00885},
+    {key:'venus',name:'Венера',orbit:62,r:3.4,color:'#e6bd79',phase:2,inc:3.39,node:76.7,gm:.1304},
+    {key:'earth',name:'Земля',orbit:75,r:3.7,color:'#3b9bfa',phase:0,inc:0,node:0,gm:.16},
+    {key:'mars',name:'Марс',orbit:99,r:2.6,color:'#e16c48',phase:2.5,inc:1.85,node:49.6,gm:.0171},
+    {key:'jupiter',name:'Юпитер',orbit:197,r:9.5,color:'#d8ad83',phase:1,inc:1.3,node:100.5,gm:50.85},
+    {key:'saturn',name:'Сатурн',orbit:290,r:8,color:'#dfcf9b',phase:2.9,inc:2.49,node:113.7,gm:15.23,ring:true},
+    {key:'uranus',name:'Уран',orbit:390,r:5.2,color:'#83d9df',phase:1.4,inc:.77,node:74,gm:2.32},
+    {key:'neptune',name:'Нептун',orbit:500,r:5.0,color:'#4777e8',phase:4.1,inc:1.77,node:131,gm:2.74}
+  ];
+  const moons=[
+    {parent:'jupiter',name:'Ио',distance:14,size:1.2,rate:.20,phase:0,color:'#e8d59a'},
+    {parent:'jupiter',name:'Европа',distance:18,size:1.0,rate:.13,phase:1.7,color:'#d8c9ad'},
+    {parent:'jupiter',name:'Ганимед',distance:23,size:1.25,rate:.085,phase:3.1,color:'#9e9585'},
+    {parent:'jupiter',name:'Каллисто',distance:29,size:1.1,rate:.055,phase:4.4,color:'#817c78'},
+    {parent:'saturn',name:'Титан',distance:17,size:1.25,rate:.075,phase:1.1,color:'#d6a65b'},
+    {parent:'saturn',name:'Рея',distance:12,size:.75,rate:.12,phase:2.6,color:'#bcb9b1'},
+    {parent:'saturn',name:'Энцелад',distance:9.5,size:.55,rate:.17,phase:4.6,color:'#e9f1ef'},
+    {parent:'uranus',name:'Титания',distance:9,size:.7,rate:.09,phase:.7,color:'#c1d5d7'},
+    {parent:'neptune',name:'Тритон',distance:9,size:.8,rate:-.10,phase:2.2,color:'#c9d6e7'}
+  ];
+  const gmSun=100,meanMotion=p=>Math.sqrt(gmSun/Math.pow(p.orbit,3));
+  function posAt(p,day){const a=p.phase+meanMotion(p)*day,inc=p.inc*Math.PI/180,node=p.node*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return{x:p.orbit*(Math.cos(node)*c-Math.sin(node)*s*Math.cos(inc)),y:p.orbit*s*Math.sin(inc),z:p.orbit*(Math.sin(node)*c+Math.cos(node)*s*Math.cos(inc))};}
+  let yaw=-.25,pitch=.28,zoom=1,dragging=false,lastX=0,lastY=0;
+  const stars=Array.from({length:180},()=>({x:Math.random(),y:Math.random(),a:.25+Math.random()*.75,r:.3+Math.random()*1.2}));
+  function resize(){const dpr=Math.min(devicePixelRatio||1,2),w=Math.max(300,container.clientWidth),h=Math.max(240,container.clientHeight);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);canvas.style.width='100%';canvas.style.height='100%';ctx.setTransform(dpr,0,0,dpr,0,0);}
+  function project(x,y,z,cx,cy){const cyaw=Math.cos(yaw),syaw=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),xx=x*cyaw-z*syaw,zz=x*syaw+z*cyaw;return{x:cx+xx,y:cy+(y*cp-zz*sp),depth:y*sp+zz*cp};}
+  function sphere(x,y,r,base){const g=ctx.createRadialGradient(x-r*.35,y-r*.4,Math.max(.2,r*.08),x,y,r*1.15);g.addColorStop(0,'#ffffff');g.addColorStop(.18,base);g.addColorStop(.72,base);g.addColorStop(1,'#080b1b');ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,Math.max(.5,r),0,Math.PI*2);ctx.fill();}
+  function draw(){const w=container.clientWidth,h=container.clientHeight;ctx.clearRect(0,0,w,h);ctx.fillStyle='#050510';ctx.fillRect(0,0,w,h);for(const st of stars){ctx.globalAlpha=st.a;ctx.fillStyle='#dce6ff';ctx.beginPath();ctx.arc(st.x*w,st.y*h,st.r,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;
+    const f=window.__fallbackFlight;if(f&&typeof f.step==='function')f.step();
+    const day=f&&f.launched?f.epochDay+f.time:(+document.getElementById('startDay').value||0);
+    const cx=w*.5,cy=h*.52,scale=Math.min(w,h)/650*zoom;ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);ctx.translate(-cx,-cy);if(f&&f.launched&&f.ship){const sp=project(f.ship.x,f.ship.y,f.ship.z,cx,cy);ctx.translate((cx-sp.x)/scale,(cy-sp.y)/scale);}
+    planets.forEach(p=>{ctx.beginPath();for(let a=0;a<=Math.PI*2+.02;a+=.025){const q=posAt(p,0);const phase=a+p.phase;const inc=p.inc*Math.PI/180,node=p.node*Math.PI/180,x=p.orbit*(Math.cos(node)*Math.cos(phase)-Math.sin(node)*Math.sin(phase)*Math.cos(inc)),y=p.orbit*Math.sin(phase)*Math.sin(inc),z=p.orbit*(Math.sin(node)*Math.cos(phase)+Math.cos(node)*Math.sin(phase)*Math.cos(inc)),pt=project(x,y,z,cx,cy);if(a===0)ctx.moveTo(pt.x,pt.y);else ctx.lineTo(pt.x,pt.y);}ctx.strokeStyle=p.color+'70';ctx.lineWidth=.8;ctx.stroke();});
+    const sun=project(0,0,0,cx,cy),glow=ctx.createRadialGradient(sun.x,sun.y,3,sun.x,sun.y,54);glow.addColorStop(0,'#fffbd0');glow.addColorStop(.22,'#ffd34d');glow.addColorStop(.55,'rgba(255,157,30,.55)');glow.addColorStop(1,'rgba(255,130,20,0)');ctx.fillStyle=glow;ctx.beginPath();ctx.arc(sun.x,sun.y,54,0,Math.PI*2);ctx.fill();sphere(sun.x,sun.y,25,'#ffbf3f');
+    const drawn=planets.map(p=>({...p,...project(...Object.values(posAt(p,day)),cx,cy)})).sort((a,b)=>a.depth-b.depth);
+    drawn.forEach(p=>{const r=p.r*(.75+Math.max(-.2,Math.min(.25,p.depth/500)));if(p.ring){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(-.28);ctx.strokeStyle='#d8c99c';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(0,0,r*1.55,r*.62,0,0,Math.PI*2);ctx.stroke();ctx.restore();}sphere(p.x,p.y,r,p.color);if(p.key==='earth'){ctx.fillStyle='#6dc76b';ctx.beginPath();ctx.ellipse(p.x-r*.1,p.y-r*.05,r*.36,r*.22,-.5,0,Math.PI*2);ctx.fill();}ctx.font='12px system-ui';ctx.textAlign='center';ctx.fillStyle='#f1f3ff';ctx.fillText(p.name,p.x,p.y+r+14);});
+    const byKey=Object.fromEntries(planets.map(p=>[p.key,p]));
+    moons.forEach(m=>{const parent=byKey[m.parent];if(!parent)return;const pp=posAt(parent,day),a=m.phase+day*m.rate,mp=project(pp.x+Math.cos(a)*m.distance,pp.y+Math.sin(a)*m.distance*.22,pp.z+Math.sin(a)*m.distance,cx,cy);ctx.fillStyle=m.color;ctx.beginPath();ctx.arc(mp.x,mp.y,Math.max(.65,m.size*scale*.9),0,Math.PI*2);ctx.fill();if(scale*zoom>0.95){ctx.font='9px system-ui';ctx.textAlign='center';ctx.fillStyle='rgba(235,242,255,.85)';ctx.fillText(m.name,mp.x,mp.y-3);}});
+    if(f&&f.prediction&&f.prediction.length>1){ctx.strokeStyle='rgba(255,215,121,.9)';ctx.lineWidth=1.4;ctx.setLineDash([5,4]);ctx.beginPath();f.prediction.forEach((v,i)=>{const q=project(v.x,v.y,v.z,cx,cy);if(i)ctx.lineTo(q.x,q.y);else ctx.moveTo(q.x,q.y);});ctx.stroke();ctx.setLineDash([]);}if(f&&f.closest&&f.closest.target){const m=project(f.closest.target.x,f.closest.target.y,f.closest.target.z,cx,cy),r=10;ctx.save();ctx.strokeStyle=f.closest.impact?'#ff4f67':'#fff0a6';ctx.lineWidth=2.4;ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=8;ctx.beginPath();ctx.moveTo(m.x-r,m.y);ctx.lineTo(m.x+r,m.y);ctx.moveTo(m.x,m.y-r);ctx.lineTo(m.x,m.y+r);ctx.moveTo(m.x-r*.65,m.y-r*.65);ctx.lineTo(m.x+r*.65,m.y+r*.65);ctx.moveTo(m.x-r*.65,m.y+r*.65);ctx.lineTo(m.x+r*.65,m.y-r*.65);ctx.stroke();ctx.restore();}
+    if(f&&f.launched&&f.ship){if(f.trail&&f.trail.length>1){ctx.strokeStyle='rgba(90,231,255,.8)';ctx.lineWidth=1.5;ctx.beginPath();f.trail.forEach((v,i)=>{const q=project(v.x,v.y,v.z,cx,cy);if(i)ctx.lineTo(q.x,q.y);else ctx.moveTo(q.x,q.y);});ctx.stroke();}const q=project(f.ship.x,f.ship.y,f.ship.z,cx,cy);ctx.save();ctx.translate(q.x,q.y);ctx.rotate(Math.atan2(f.ship.vz,f.ship.vx)+Math.PI/2);ctx.fillStyle='#8cecff';ctx.shadowColor='#4bd7ff';ctx.shadowBlur=12;ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(4,5);ctx.lineTo(0,3);ctx.lineTo(-4,5);ctx.closePath();ctx.fill();ctx.restore();const sp=document.getElementById('hud-speed'),tm=document.getElementById('hud-time');if(sp)sp.textContent=Math.hypot(f.ship.vx,f.ship.vy,f.ship.vz).toFixed(3);if(tm)tm.textContent=Math.floor(f.time)+' дн.';}
+    ctx.restore();requestAnimationFrame(draw);}
+  canvas.style.display='block';resize();new ResizeObserver(resize).observe(container);window.addEventListener('resize',resize);canvas.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!dragging)return;yaw+=(e.clientX-lastX)*.008;pitch=Math.max(-1.3,Math.min(1.3,pitch+(e.clientY-lastY)*.006));lastX=e.clientX;lastY=e.clientY;});canvas.addEventListener('pointerup',()=>dragging=false);canvas.addEventListener('pointercancel',()=>dragging=false);canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.35,Math.min(8,zoom*(e.deltaY>0?.90:1.11)));},{passive:false});window.__hideFallbackSolarScene=()=>{canvas.style.display='none';};draw();
+})();
+</script>
+
+<script>
+// Native controls and a real numerical gravity simulation for browsers that cannot load Three.js.
+(function(){
+  const $=id=>document.getElementById(id), fallback={launched:false,editing:false,time:0,epochDay:300,timeScale:1,azimuth:0,elevation:0,fuel:1.5,used:0,trail:[],prediction:[],ship:null};
+  window.__fallbackFlight=fallback;const gmSun=100,earthGM=.16,earthRadius=3.7,altScale=earthRadius/6371,dt=.02;
+  const bodies=[
+    {key:'mercury',orbit:42,phase:.7,inc:7,node:48.3,gm:earthGM*.0553,r:2},
+    {key:'venus',orbit:62,phase:2,inc:3.39,node:76.7,gm:earthGM*.815,r:3.4},
+    {key:'earth',orbit:75,phase:0,inc:0,node:0,gm:earthGM,r:earthRadius},
+    {key:'mars',orbit:99,phase:2.5,inc:1.85,node:49.6,gm:earthGM*.107,r:2.6},
+    {key:'jupiter',orbit:197,phase:1,inc:1.3,node:100.5,gm:earthGM*317.8,r:9.5},
+    {key:'saturn',orbit:290,phase:2.9,inc:2.49,node:113.7,gm:earthGM*95.2,r:8},
+    {key:'uranus',orbit:390,phase:1.4,inc:.77,node:74,gm:earthGM*14.5,r:5.2},
+    {key:'neptune',orbit:500,phase:4.1,inc:1.77,node:131,gm:earthGM*17.1,r:5.0}
+  ];
+  const motion=p=>Math.sqrt(gmSun/(p.orbit*p.orbit*p.orbit));
+  function pos(p,day){const a=p.phase+motion(p)*day,inc=p.inc*Math.PI/180,node=p.node*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return{x:p.orbit*(Math.cos(node)*c-Math.sin(node)*s*Math.cos(inc)),y:p.orbit*s*Math.sin(inc),z:p.orbit*(Math.sin(node)*c+Math.cos(node)*s*Math.cos(inc))};}
+  function add(a,b,k=1){return{x:a.x+b.x*k,y:a.y+b.y*k,z:a.z+b.z*k,vx:a.vx+b.vx*k,vy:a.vy+b.vy*k,vz:a.vz+b.vz*k};}
+  function acc(q,t){let ax=-gmSun*q.x/Math.max(8,Math.hypot(q.x,q.y,q.z))**3,ay=-gmSun*q.y/Math.max(8,Math.hypot(q.x,q.y,q.z))**3,az=-gmSun*q.z/Math.max(8,Math.hypot(q.x,q.y,q.z))**3;for(const p of bodies){const b=pos(p,fallback.epochDay+t),dx=q.x-b.x,dy=q.y-b.y,dz=q.z-b.z,d=Math.max(Math.hypot(dx,dy,dz),p.r*.45,1),g=p.gm/(d*d*d);ax-=g*dx;ay-=g*dy;az-=g*dz;}return{x:ax,y:ay,z:az};}
+  function deriv(q,t){const a=acc(q,t);return{x:q.vx,y:q.vy,z:q.vz,vx:a.x,vy:a.y,vz:a.z};}
+  function integrate(q,h,t){const k1=deriv(q,t),k2=deriv(add(q,k1,h/2),t+h/2),k3=deriv(add(q,k2,h/2),t+h/2),k4=deriv(add(q,k3,h),t+h);for(const k of ['x','y','z','vx','vy','vz'])q[k]+=h/6*(k1[k]+2*k2[k]+2*k3[k]+k4[k]);}
+  function directionFromControls(q){const speed=Math.hypot(q.vx,q.vy,q.vz)||1,pro={x:q.vx/speed,y:q.vy/speed,z:q.vz/speed},radLen=Math.hypot(q.x,0,q.z)||1,rad={x:q.x/radLen,y:0,z:q.z/radLen},az=+$('trajectory').value*Math.PI/180,el=+$('elevation').value*Math.PI/180;let d={x:pro.x*Math.cos(az)*Math.cos(el)+rad.x*Math.sin(az)*Math.cos(el),y:pro.y*Math.cos(az)*Math.cos(el)+Math.sin(el),z:pro.z*Math.cos(az)*Math.cos(el)+rad.z*Math.sin(az)*Math.cos(el)};const n=Math.hypot(d.x,d.y,d.z)||1;return{x:d.x/n,y:d.y/n,z:d.z/n};}
+  function makeInitialShip(){const day=+$('startDay').value,earth=pos(bodies[2],day),a=bodies[2].phase+motion(bodies[2])*day,rad={x:Math.cos(a),y:0,z:Math.sin(a)},pro={x:-Math.sin(a),y:0,z:Math.cos(a)},r=earthRadius+(+$('orbitAlt').value)*altScale,localSpeed=Math.sqrt(earthGM/r),baseSpeed=Math.sqrt(gmSun/bodies[2].orbit),q={x:earth.x+rad.x*r,y:earth.y,z:earth.z+rad.z*r,vx:pro.x*(baseSpeed+localSpeed),vy:0,vz:pro.z*(baseSpeed+localSpeed)};const d=directionFromControls(q),dv=+$('impulse').value;q.vx+=d.x*dv;q.vy+=d.y*dv;q.vz+=d.z*dv;return q;}
+  function predict(from,tStart,includePending){let q={...from};if(includePending){const d=directionFromControls(q),dv=+$('impulse').value;q.vx+=d.x*dv;q.vy+=d.y*dv;q.vz+=d.z*dv;}const out=[],target=bodies.find(p=>p.key===$('targetPlanet').value)||bodies[3];let best={distance:Infinity,ship:null,target:null,t:0};for(let i=0;i<7000;i++){if(i%2===0){const t=i*.15,pt={x:q.x,y:q.y,z:q.z,t},bp=pos(target,fallback.epochDay+tStart+t),d=Math.hypot(q.x-bp.x,q.y-bp.y,q.z-bp.z);out.push(pt);if(d<best.distance)best={distance:d,ship:{x:q.x,y:q.y,z:q.z},target:bp,t};}integrate(q,.15,tStart+i*.15);if(Math.hypot(q.x,q.y,q.z)>800)break;}best.impact=best.distance<target.r+1.5;fallback.closest=best;return out;}
+  function refreshPrediction(){if(!fallback.launched){fallback.epochDay=+$('startDay').value;fallback.ship=makeInitialShip();fallback.prediction=predict(fallback.ship,0,false);}else if(fallback.ship){fallback.prediction=predict(fallback.ship,fallback.time,fallback.editing);}const st=$('targetStatus'),t=bodies.find(p=>p.key===$('targetPlanet').value)||bodies[3];if(st&&fallback.closest)st.textContent=(fallback.closest.impact?'Возможное попадание':'Ближайшее сближение')+' с '+t.name+': примерно через '+fallback.closest.t.toFixed(1)+' дн., расстояние '+fallback.closest.distance.toFixed(2)+' ед. масштаба. Крестик отмечает прогнозируемое положение планеты.';}
+  function finishFallback(won,message){fallback.launched=false;fallback.ended=true;$('resultText').className=won?'win':'lose';$('resultText').textContent=message;$('result-panel').classList.remove('hidden');}
+  function checkFallbackCollision(){const day=fallback.epochDay+fallback.time,targetKey=$('targetPlanet').value;for(const p of bodies){const b=pos(p,day),d=Math.hypot(fallback.ship.x-b.x,fallback.ship.y-b.y,fallback.ship.z-b.z);if(d<p.r+1.8){finishFallback(p.key===targetKey,p.key===targetKey?'КА достиг точки назначения: '+p.name+'.':'КА потерян: столкновение с планетой '+p.name+'.');return true;}}return false;}
+  fallback.step=()=>{if(!fallback.launched||fallback.editing||!fallback.ship)return;const h=dt*fallback.timeScale;integrate(fallback.ship,h,fallback.time);fallback.time+=h;if(checkFallbackCollision())return;if(Math.hypot(fallback.ship.x,fallback.ship.y,fallback.ship.z)>800){finishFallback(false,'КА потерян: аппарат покинул пределы моделируемой системы.');return;}if(fallback.time>+$('timeLimit').value){finishFallback(false,'КА потерян: время полёта истекло.');return;}fallback.trail.push({x:fallback.ship.x,y:fallback.ship.y,z:fallback.ship.z});if(fallback.trail.length>1800)fallback.trail.shift();if(fallback.time%1<h)refreshPrediction();};
+  function tab(which){$('setup-params').classList.toggle('hidden',which!=='params');$('impulse-controls').classList.toggle('hidden',which!=='impulse');$('paramsTab').classList.toggle('active',which==='params');$('impulseTab').classList.toggle('active',which==='impulse');}
+  function setDvHud(){$('hud-dv').textContent=fallback.used.toFixed(2)+' / '+fallback.fuel.toFixed(2);}
+  $('launchBtn').addEventListener('click',()=>{if(window.__solarModuleReady)return;const dv=+$('impulse').value;fallback.fuel=+$('fuel').value;if(dv>fallback.fuel+1e-8){$('impulseHint').textContent='Недостаточно топлива для выбранного импульса.';tab('impulse');return;}fallback.epochDay=+$('startDay').value;fallback.time=0;fallback.ship=makeInitialShip();fallback.launched=true;fallback.editing=false;fallback.used=dv;fallback.trail=[{x:fallback.ship.x,y:fallback.ship.y,z:fallback.ship.z}];fallback.prediction=predict(fallback.ship,0,false);$('setup-panel').classList.add('hidden');$('flight-panel').classList.remove('hidden');$('launchBtn').disabled=true;setDvHud();});
+  $('paramsTab').addEventListener('click',()=>{if(!window.__solarModuleReady)tab('params');});
+  $('impulseTab').addEventListener('click',()=>{if(window.__solarModuleReady)return;tab('impulse');if(fallback.launched){fallback.editing=true;$('trajectoryEditActions').classList.remove('hidden');const remaining=Math.max(0,fallback.fuel-fallback.used);$('impulse').max=remaining.toFixed(2);$('impulse').value=Math.min(+$('impulse').value,remaining).toFixed(2);$('impulseVal').textContent=(+$('impulse').value).toFixed(2);$('fuelPreview').textContent=(+$('impulse').value).toFixed(2)+' ΔV';refreshPrediction();}else refreshPrediction();});
+  $('applyImpulseBtn').addEventListener('click',()=>{if(window.__solarModuleReady)return;const dv=+$('impulse').value;if(fallback.used+dv>fallback.fuel+1e-8){$('impulseHint').textContent='Недостаточно топлива для коррекции.';return;}if(!fallback.launched)return;const d=directionFromControls(fallback.ship);fallback.ship.vx+=d.x*dv;fallback.ship.vy+=d.y*dv;fallback.ship.vz+=d.z*dv;fallback.used+=dv;fallback.editing=false;fallback.trail=[{x:fallback.ship.x,y:fallback.ship.y,z:fallback.ship.z}];fallback.prediction=predict(fallback.ship,fallback.time,false);$('trajectoryEditActions').classList.add('hidden');$('impulseHint').textContent='Импульс применён. Время снова идёт; прогноз пересчитан с учётом гравитации планет.';setDvHud();});
+  $('cancelImpulseBtn').addEventListener('click',()=>{if(window.__solarModuleReady)return;fallback.editing=false;$('impulse').max='4.00';$('trajectoryEditActions').classList.add('hidden');refreshPrediction();});
+  $('restartBtn').addEventListener('click',()=>{if(window.__solarModuleReady)return;$('impulse').max='4.00';fallback.launched=false;fallback.ended=false;fallback.editing=false;fallback.time=0;fallback.used=0;fallback.trail=[];fallback.epochDay=+$('startDay').value;fallback.ship=makeInitialShip();$('setup-panel').classList.remove('hidden');$('flight-panel').classList.add('hidden');$('result-panel').classList.add('hidden');$('launchBtn').disabled=false;$('trajectoryEditActions').classList.add('hidden');$('hud-time').textContent='0';$('hud-speed').textContent='0.00';fallback.fuel=+$('fuel').value;setDvHud();tab('params');refreshPrediction();});
+  document.querySelectorAll('.tsBtn').forEach(btn=>btn.addEventListener('click',()=>{if(window.__solarModuleReady)return;document.querySelectorAll('.tsBtn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');fallback.timeScale=+btn.dataset.ts;}));
+  ['startDay','orbitAlt','trajectory','elevation','impulse'].forEach(id=>$(id).addEventListener('input',()=>{if(id==='startDay')$('startDayVal').textContent=$('startDay').value;if(id==='orbitAlt')$('orbitAltVal').textContent=$('orbitAlt').value;$('trajectoryVal').textContent=$('trajectory').value+'°';$('elevationVal').textContent=$('elevation').value+'°';$('impulseVal').textContent=(+$('impulse').value).toFixed(2);$('fuelPreview').textContent=(+$('impulse').value).toFixed(2)+' ΔV';if(!window.__solarModuleReady)refreshPrediction();}));
+  $('fuel').addEventListener('input',()=>{fallback.fuel=+$('fuel').value;$('fuelVal').textContent=fallback.fuel.toFixed(2);if(!window.__solarModuleReady)setDvHud();});
+  $('timeLimit').addEventListener('input',()=>$('timeLimitVal').textContent=$('timeLimit').value);
+  $('targetPlanet').addEventListener('change',()=>{if(!window.__solarModuleReady)refreshPrediction();});
+  fallback.fuel=+$('fuel').value;fallback.epochDay=+$('startDay').value;fallback.ship=makeInitialShip();refreshPrediction();
+})();
+</script>
+<script type="module" src="script.js"></script>
 </body>
 </html>

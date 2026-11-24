@@ -77,3 +77,57 @@ h2 { margin: 0; font-size: 16px; font-weight: 600; }
 .camera-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .camera-actions button { min-height: 42px; }
 #autoAimBtn { width: 100%; min-height: 46px; }
+
+.row select, .row input[type="date"] { grid-column: 2 / 4; width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid #4a4a6a; border-radius: 8px; background: #17172b; color: #f0f1ff; font: inherit; color-scheme: dark; }
+.row input[type="date"] { accent-color: #6ca4e0; }
+
+
+/* Yola minimal title and mission flow */
+html, body { background: #07152e; }
+#app { position:relative; max-width:980px; }
+#welcome-screen { display:none; min-height:calc(100vh - 20px); width:100%; flex-direction:column; align-items:center; justify-content:center; gap:0; color:#f4f7ff; text-align:center; }
+body.title-screen #welcome-screen { display:flex; }
+body.title-screen #app > h1,
+body.title-screen #hud,
+body.title-screen #scene-container,
+body.title-screen #runtime-error,
+body.title-screen #main-menu,
+body.title-screen #panel { display:none !important; }
+.welcome-mark { width:min(58vw,300px); margin-bottom:28px; color:#edf3ff; filter:drop-shadow(0 0 24px rgba(205,225,255,.12)); }
+.welcome-mark svg { display:block; width:100%; height:auto; }
+.welcome-title { font-size:clamp(20px,4vw,28px); letter-spacing:.34em; font-weight:350; padding-left:.34em; }
+.welcome-subtitle { margin-top:12px; color:rgba(226,236,255,.62); font-size:13px; letter-spacing:.08em; }
+.welcome-actions { display:flex; flex-direction:column; width:min(260px,76vw); gap:12px; margin-top:54px; }
+.welcome-actions button { min-height:48px; border-radius:5px; letter-spacing:.12em; font-size:13px; }
+.welcome-primary { background:#eaf0fb; color:#0b1b36; border:1px solid #eaf0fb; font-weight:650; }
+.welcome-primary:active { background:#cbd9ef; }
+.welcome-secondary { background:transparent; color:#d9e4f8; border:1px solid rgba(218,231,255,.28); }
+.yola-mark { position:absolute; bottom:22px; color:rgba(233,241,255,.62); font-size:13px; letter-spacing:.28em; font-weight:400; }
+body.mission-screen #app > h1 { display:block; margin:20px 0 12px; color:#f1f5ff; font-size:18px; font-weight:450; letter-spacing:.08em; }
+body.mission-screen #hud, body.mission-screen #scene-container, body.mission-screen #runtime-error { display:none !important; }
+body.mission-screen #main-menu { display:grid; grid-template-columns:1fr; }
+body.mission-screen #main-menu #paramsTab,
+body.mission-screen #main-menu #impulseTab,
+body.mission-screen #main-menu #restartBtn { display:none !important; }
+body.mission-screen #main-menu #launchBtn { display:block; width:100%; background:#eaf0fb; color:#0b1b36; border:1px solid #eaf0fb; border-radius:6px; }
+body.mission-screen #panel { display:block; margin-top:6px; background:rgba(231,240,255,.055); border:1px solid rgba(218,231,255,.10); border-radius:8px; }
+body.mission-screen #setup-panel { display:flex !important; }
+body.mission-screen #setup-params { display:flex !important; }
+body.mission-screen #impulse-controls { display:none !important; }
+body.mission-screen #flight-panel, body.mission-screen #result-panel { display:none !important; }
+.back-title { align-self:flex-start; min-height:34px; padding:5px 10px; background:transparent; border-color:rgba(218,231,255,.22); color:#dbe7fb; border-radius:5px; }
+body.game-screen #welcome-screen { display:none !important; }
+body.game-screen #main-menu #launchBtn, body.game-screen #main-menu #paramsTab { display:none !important; }
+body.game-screen #main-menu { grid-template-columns:repeat(2,minmax(0,1fr)); }
+body.game-screen #main-menu #impulseTab, body.game-screen #main-menu #restartBtn { display:block; }
+body.game-screen #backToTitle { display:none !important; }
+@media(max-width:600px){
+ #welcome-screen { min-height:calc(100vh - 14px); }
+ .welcome-mark { width:min(64vw,260px); margin-bottom:22px; }
+ .welcome-actions { margin-top:44px; }
+ body.mission-screen #app > h1 { margin-top:10px; }
+}
+
+.camera-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.camera-actions button { padding:8px 6px; font-size:13px; }
+@media(max-width:520px){ .camera-actions { grid-template-columns:1fr; } }
